@@ -65,10 +65,6 @@ sudo setcap cap_net_raw,cap_net_admin=eip ./network-traffic-analyzer
 ```
 sudo ./network-traffic-analyzer -i eth0
 ```
-### Filter DNS traffic
-```
-sudo ./network-traffic-analyzer -i any --filter proto:dns
-```
 ### Capture 100 packets
 ```
 sudo ./network-traffic-analyzer -i wlan0 -c 100
@@ -77,8 +73,8 @@ sudo ./network-traffic-analyzer -i wlan0 -c 100
 ```
 sudo ./network-traffic-analyzer --offline traffic.pcap
 ```
-### Export results
+### Export results (json / csv)
 ```
-sudo ./network-traffic-analyzer --json result.json
+sudo ./network-traffic-analyzer --json result.json --csv result.csv
 
 ```
