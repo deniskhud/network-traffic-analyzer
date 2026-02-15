@@ -2,13 +2,10 @@
 #include "../../include/stats/protocolStats.hpp"
 #include "../../include/cli/cli.hpp"
 void PcapCapture::initialize() {
-	/*	find all devs available in network,
-	 *  save them to pcap_if_t struct
-	 */
+	/*	find all devs available in network, save them to pcap_if_t struct (interfaces) */
 	if (pcap_findalldevs(&interfaces, errbuf) == -1) {
 		fprintf(stderr, "Error: pcap_findalldevs has been failed - %s\n", errbuf);
 	}
-
 }
 
 void PcapCapture::start() {
@@ -18,12 +15,6 @@ void PcapCapture::start() {
 		net = 0;
 		mask = 0;
 	}
-
-	/* print capture info */
-	/*printf("Device: %s\n", interface);
-	printf("Number of packets: %d\n", num_packets);
-	printf("Filter expression: %s\n", filter_exp.c_str());
-	*/
 
 	/* open capture device */
 	handle = pcap_open_live(interface.c_str(), SNAP_LEN, 1, 1000, errbuf);
@@ -53,36 +44,35 @@ void PcapCapture::start() {
 	}
 
 
-	/* now we can set our callback function */
-	/* we create a static callback function cause
-	 * C lib cant work with class methods, then
-	 * we use a static function(its just a function with namespace)
-	 */
+	/*we start a separate thread */
 	running = true;
 	thread = std::thread([this]() {
-			pcap_loop(handle, num_packets, &PcapCapture::callback, reinterpret_cast<u_char*>(this));
-			running = false;
+		if (pcap_loop(handle, num_packets, &PcapCapture::callback, reinterpret_cast<u_char*>(this)) < 0) {
+			//fprintf(stderr, "Error in pcap_loop: %s\n", pcap_geterr(handle));
+			//pcap_close(handle);
+		}
+		running = false;
 	});
 	
 }
+
 void PcapCapture::stop() {
-	running = false;
+
 	if (handle) {
-		pcap_breakloop(handle);
+		if (running == true) pcap_breakloop(handle);
+		pcap_close(handle);
+		handle = nullptr;
 	}
 
 	if (thread.joinable()) {
 		thread.join();
 	}
-	pcap_freecode(&fp);
-	if (handle) {
-		pcap_close(handle);
-		handle = nullptr;
+	if (filter_exp != "") {
+			pcap_freecode(&fp);
 	}
 
-
 }
-
+/* print all available interfaces */
 void PcapCapture::print_interfaces() {
 	int i = 0;
 	for (pcap_if_t *dev = interfaces; dev; dev = dev->next) {
@@ -124,9 +114,8 @@ void PcapCapture::got_packet(const struct pcap_pkthdr *header, const u_char *pac
 		TransportProtocol prot = ip.get_protocol();
 
 		packetView = Packet(v4, prot, ip.get_source(), ip.get_dest(), ip.get_src_port(), ip.get_dest_port(), header->len, ip.get_payload_len(), ip.get_payload_ptr());
-		stats.add_packet(packetView);
-		packet_log.push(packetView);
-		stats.push(packetView);
+		stats->add_packet(packetView);
+		stats->push(packetView);
 
 	}
 	/* ipv6 type */
@@ -134,9 +123,8 @@ void PcapCapture::got_packet(const struct pcap_pkthdr *header, const u_char *pac
 		IPv6 ip((u_char*)(packet) + sizeof(struct ether_header));
 		TransportProtocol prot = ip.get_protocol();
 		packetView = Packet(v6, prot, ip.get_source(), ip.get_dest(), ip.get_src_port(), ip.get_dest_port(), header->len, ip.get_payload_len(), ip.get_payload_ptr());
-		stats.add_packet(packetView);
-		packet_log.push(packetView);
-		stats.push(packetView);
+		stats->add_packet(packetView);
+		stats->push(packetView);
 
 	}
 	if (ether_type == ETHERTYPE_VLAN) {
@@ -146,15 +134,14 @@ void PcapCapture::got_packet(const struct pcap_pkthdr *header, const u_char *pac
 	if (ether_type == ETHERTYPE_ARP) {
 
 	}
-	//stats.push(packetView);
-
 }
 
-void PcapCapture::set_capabilities(std::string& interface, int num_packets, std::string& filter_exp, int packets_limit) {
+void PcapCapture::set_capabilities(std::string& interface, int num_packets, std::string& filter_exp, int packets_limit, Stats* stats) {
 	this->interface = interface;
 	this->num_packets = num_packets;
 	this->filter_exp = filter_exp;
-	stats.set_packets_limit(packets_limit);
+	this->stats = stats;
+	this->stats->set_packets_limit(packets_limit);
 
 }
 
@@ -169,7 +156,7 @@ void PcapCapture::start_offline(std::string fpath) {
 			if (pcap_loop(handle, num_packets, &PcapCapture::callback, reinterpret_cast<u_char*>(this)) < 0) {
 				fprintf(stderr, "Error in pcap_loop: %s\n", pcap_geterr(handle));
 				//pcap_close(handle);
-				running = false;
+
 			}
 			running = false;
 	});

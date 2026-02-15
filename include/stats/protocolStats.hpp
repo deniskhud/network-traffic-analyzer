@@ -1,16 +1,16 @@
 #ifndef PROTOCOLSTATS_HPP
 #define PROTOCOLSTATS_HPP
+
 #include <chrono>
 #include <cstdint>
-
 #include "../packet/packet.hpp"
 #include <unordered_map>
 #include <filesystem>
 #include <fstream>
 #include <map>
 #include <queue>
-
 #include "ftxui/dom/elements.hpp"
+
 using namespace ftxui;
 struct protocolStats {
 	uint32_t packets = 0;
@@ -66,6 +66,7 @@ public:
 		packets.push_back(p);
 	}
 	double bandwidth = 0;
+	double max_bandwidth = 0;
 
 	void update_bandwidth();
 	double smooth_value(size_t i, size_t start);

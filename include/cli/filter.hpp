@@ -2,7 +2,7 @@
 #define FILTER_HPP
 #include <string>
 #include <vector>
-#include <map>
+
 enum filter_type {
 	PROTOCOL,
 	PORT,

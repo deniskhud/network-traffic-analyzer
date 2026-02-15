@@ -1,17 +1,17 @@
 #include "../../include/cli/argsParse.hpp"
 
-argsParse::argsParse(int argc, char** argv) {
-	po::options_description desc("Options");
+argsParser::argsParser(int argc, char** argv) {
 	desc.add_options()
 		("help,h", "Display this help message and exit")
-
-		("interface,i", po::value<std::string>(),
+		("interfaces, interfaces","Display all possible interfaces")
+		("interface,i", po::value<std::string>()->default_value("wlan0"),
 			"Network interface to capture packets from (e.g. eth0, wlan0, any)")
 
 		("count,c", po::value<int>()->default_value(0),
 			"Number of packets to capture (0 = unlimited)")
+		("time, t", po::value<int>()->default_value(INT_MAX),"Working time (in seconds)")
 
-		("pcap,r", po::value<std::string>(),
+		("offline,r", po::value<std::string>(),
 			"Read packets from an offline pcap file")
 
 		("filter,f", po::value<std::vector<std::string>>()->composing(),
@@ -21,16 +21,13 @@ argsParse::argsParse(int argc, char** argv) {
 			"  dst:<ip>       Destination IP address\n"
 			"  port:<number>  Source or destination port")
 
-		("view,v", po::value<std::string>()->default_value("top-talkers"),
-			"Output view: protocol | top-talkers | bandwidth")
-
 		("sort,s", po::value<std::string>()->default_value("bytes"),
 			"Sort field: bytes | packets | ip")
 
 		("order,o", po::value<std::string>()->default_value("desc"),
 			"Sort order: asc | desc")
 
-		("limit,n", po::value<int>()->default_value(10),
+		("limit,n", po::value<int>()->default_value(43),
 			"Limit number of displayed entries")
 
 		("csv", po::value<std::string>(),
@@ -39,20 +36,11 @@ argsParse::argsParse(int argc, char** argv) {
 		("json", po::value<std::string>(),
 			"Export analysis results to JSON file");
 
-	po::variables_map vm;
 	po::store(po::parse_command_line(argc, argv, desc), vm);
 	po::notify(vm);
-
-	if (vm.count("help")) {
-		print_help();
-
-	}
-
-
-
 }
 
-void argsParse::print_help() {
+void argsParser::print_help() const {
 	std::cout <<
 		"Network Traffic Analyzer\n"
 		"========================\n\n"

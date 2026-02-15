@@ -23,12 +23,11 @@ void Stats::update_bandwidth() {
 
 		last_b = total_b;
 		last_tick = now;
-		const double alpha = 0.2; // чем меньше — тем плавнее
+		const double alpha = 0.2;
 		smooth_bandwidth =
 			alpha * bandwidth + (1.0 - alpha) * smooth_bandwidth;
 
 		bandwidth_history.push_back({ ts, smooth_bandwidth });
-		//bandwidth_history.push_back({ ts, bandwidth });
 	}
 }
 
@@ -141,8 +140,7 @@ ftxui::Element Stats::print_transport_stats() {
 	return vbox({
 		text("=== Transport protocols === ") | bold,
 		table.Render()
-	}) | size(HEIGHT, EQUAL, 30);
-	/*return vbox(rows) | border;*/
+	}) | flex/*| size(HEIGHT, EQUAL, 30)*/;
 }
 
 void Stats::update_application_stats() {
@@ -189,7 +187,7 @@ ftxui::Element Stats::print_application_stats() {
 	return vbox({
 		text("=== Application protocols ===") | bold,
 		table.Render()
-	})  | size(HEIGHT, EQUAL, 30) ;
+	})  | flex;
 }
 
 void Stats::update_ip_stats(size_t limit) {
@@ -232,7 +230,7 @@ Element Stats::print_ip_stats(size_t limit)  {
 		text("=== Top IP addresses ===") | bold,
 
 		table.Render()
-	});
+	}) | flex;
 }
 
 
@@ -269,7 +267,6 @@ ftxui::Element Stats::print_pairs(size_t limit) {
 	Table table(pairs_rows);
 	table.SelectAll().Border(LIGHT);
 
-	//table.SelectColumn(0).Border(LIGHT);
 	table.SelectRow(0).Decorate(bold);
 	table.SelectRow(0).SeparatorVertical(LIGHT);
 	table.SelectRow(0).Decorate(bold);
@@ -284,7 +281,7 @@ ftxui::Element Stats::print_pairs(size_t limit) {
 void Stats::update_packets(){
 	std::lock_guard lock(mtx);
 	packets_rows.clear();
-	packets_rows.push_back({ "IPVersion", "Transport protocol", "Source", "Destination", "Application protocol" });
+	packets_rows.push_back({ "IPVersion", "Transport protocol", "Source", "Destination", "App protocol"});
 
 	for (auto& packet : packets) {
 		packets_rows.push_back({
@@ -316,7 +313,7 @@ Element Stats::print_packets() {
 }
 
 double Stats::smooth_value(size_t i, size_t start) {
-	const int window = 3; // ширина сглаживания
+	const int window = 3;
 	double sum = 0.0;
 	int count = 0;
 
@@ -345,21 +342,21 @@ ftxui::Element Stats::print_bandwidth() {
 		size_t n = bandwidth_history.size();
 		size_t start = n > 50 ? n - 50 : 0;
 
-		// максимум
+
 		double max_bw = 1.0;
 		for (size_t i = start; i < n; ++i)
 			max_bw = std::max(max_bw, bandwidth_history[i].bytes_per_sec);
 
 		for (int x = 0; x < width; ++x) {
-			// нормализованная позиция
+
 			double t = (double)x / (width - 1);
 
-			// соответствующий индекс в данных
+
 			double idx_f = start + t * (n - start - 1);
 			size_t i0 = (size_t)idx_f;
 			size_t i1 = std::min(i0 + 1, n - 1);
 
-			// линейная интерполяция
+
 			double frac = idx_f - i0;
 			double bw =
 				bandwidth_history[i0].bytes_per_sec * (1.0 - frac) +
@@ -371,14 +368,14 @@ ftxui::Element Stats::print_bandwidth() {
 
 		return output;
 	};
-
+	max_bandwidth = std::max(max_bandwidth, bandwidth);
 	return vbox({
-		text(std::format(" Bandwidth: {:.2f}", bandwidth)) | bold,
+		text(std::format(" Bandwidth: {:.2f} KB / max: {:.2f} KB", bandwidth, max_bandwidth)) | bold,
 		graph(fn)
-		| size(HEIGHT, EQUAL, 20) | size(WIDTH, EQUAL, 100)
+		| size(HEIGHT, EQUAL, 20) | size(WIDTH, EQUAL, 60)
 		| border
-		| color(Color::Green) ,
-});
+		| color(Color::Green),
+}) ;
 }
 
 void Stats::export_csv(const std::string& filename) {

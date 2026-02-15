@@ -1,5 +1,7 @@
 #include "../../include/cli/filter.hpp"
 
+#include <map>
+
 filter parse(std::string str) {
 	auto pos = str.find(':');
 	if (pos == std::string::npos) {

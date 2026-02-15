@@ -71,21 +71,15 @@ void IPv4::handle_udp() {
 void IPv4::handle_icmp() {
 	auto* icmp = reinterpret_cast<icmphdr*>((u_char*)ip_hdr + ip_hdr_len);
 
-	//printf("ICMP protocol: \n");
+
 }
 void IPv4::handle_icmpv6() {
 	auto* icmp = reinterpret_cast<icmp6_hdr*>((u_char*)ip_hdr + ip_hdr_len);
-	//printf("ICMP6 protocol: \n");
+
 }
 void IPv4::handle_igmp() {
 	auto* igmp = reinterpret_cast<struct igmp*>((u_char*)ip_hdr + ip_hdr_len);
-	//printf("IGMP protocol: \n");
-}
 
-void IPv4::print_info() {
-	//printf("IPv4\n");
-	//printf("		src %s: \n", inet_ntoa(ip_hdr->ip_src));
-	//printf("		dst %s: \n", inet_ntoa(ip_hdr->ip_dst));
 }
 
 std::string IPv4::get_source() {
@@ -174,8 +168,7 @@ void IPv6::handle_udp() {
 	const auto udp = reinterpret_cast<const udphdr*>(ptr);
 	dest_port = ntohs(udp->dest);
 	src_port = ntohs(udp->source);
-	/*printf("udp dst %d\n", dest_port);
-	printf("udp src %d\n", src_port);*/
+
 	payload_ptr = (const uint8_t*)udp + sizeof(udphdr);
 	payload_len = ntohs(udp->len) - sizeof(udphdr);
 
@@ -193,18 +186,6 @@ void IPv6::handle_icmpv6() {
 void IPv6::handle_igmp() {
 
 	ptr = nullptr;
-}
-
-void IPv6::print_info() {
-	printf("IPv6\n");
-
-	char src[INET6_ADDRSTRLEN];
-	char dst[INET6_ADDRSTRLEN];
-	inet_ntop(AF_INET6, &ip_hdr->ip6_src, src, sizeof(src));
-	inet_ntop(AF_INET6, &ip_hdr->ip6_dst, dst, sizeof(dst));
-
-	printf(" src %s\n", src);
-	printf(" dst %s\n", dst);
 }
 
 std::string IPv6::get_source() {
