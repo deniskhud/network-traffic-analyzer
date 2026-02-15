@@ -1,10 +1,8 @@
 ```ruby
-███╗   ██╗███████╗████████╗ █████╗ ███╗   ██╗ █████╗ ██╗
-████╗  ██║██╔════╝╚══██╔══╝██╔══██╗████╗  ██║██╔══██╗██║
-██╔██╗ ██║█████╗     ██║   ███████║██╔██╗ ██║███████║██║
-██║╚██╗██║██╔══╝     ██║   ██╔══██║██║╚██╗██║██╔══██║██║
-██║ ╚████║███████╗   ██║   ██║  ██║██║ ╚████║██║  ██║███████╗
-╚═╝  ╚═══╝╚══════╝   ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝╚══════╝
+▄▄▄▄▄▄ ▄▄▄▄   ▄▄▄  ▄▄▄▄▄ ▄▄▄▄▄ ▄▄  ▄▄▄▄    ▄▄▄  ▄▄  ▄▄  ▄▄▄  ▄▄  ▄▄ ▄▄ ▄▄▄▄▄ ▄▄▄▄▄ ▄▄▄▄  
+  ██   ██▄█▄ ██▀██ ██▄▄  ██▄▄  ██ ██▀▀▀   ██▀██ ███▄██ ██▀██ ██  ▀███▀   ▄█▀ ██▄▄  ██▄█▄ 
+  ██   ██ ██ ██▀██ ██    ██    ██ ▀████   ██▀██ ██ ▀██ ██▀██ ██▄▄▄ █   ▄██▄▄ ██▄▄▄ ██ ██ 
+                                                                                         
 ```
 
 >A high-performance CLI network analyzer built with libpcap for raw packet capture and FTXUI for a fully interactive terminal UI.
@@ -19,7 +17,7 @@ The application captures packets directly from a network interface, parses proto
 Run with:
 
 ```bash
-sudo netanalyze
+sudo ./network-traffic-analyzer
 ```
 
 Or grant capabilities:
@@ -65,22 +63,22 @@ sudo setcap cap_net_raw,cap_net_admin=eip ./network-traffic-analyzer
 
 ### Live capture on eth0
 ```
-sudo netanalyze -i eth0
+sudo ./network-traffic-analyzer -i eth0
 ```
 ### Filter DNS traffic
 ```
-sudo netanalyze -i any --filter proto:dns
+sudo ./network-traffic-analyzer -i any --filter proto:dns
 ```
 ### Capture 100 packets
 ```
-sudo netanalyze -i wlan0 -c 100
+sudo ./network-traffic-analyzer -i wlan0 -c 100
 ```
 ### Analyze offline pcap file
 ```
-netanalyze -r traffic.pcap
+sudo ./network-traffic-analyzer --offline traffic.pcap
 ```
 ### Export results
 ```
-netanalyze -r traffic.pcap --json result.json
+sudo ./network-traffic-analyzer --json result.json
 
 ```
