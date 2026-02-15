@@ -12,9 +12,9 @@ The application captures packets directly from a network interface, parses proto
 
 ---
 ![Preview](example.png)
-# Permissions
 
-Packet capture requires elevated privileges.
+> [!IMPORTANT]
+> Packet capture requires elevated privileges.
 
 Run with:
 
@@ -50,6 +50,7 @@ sudo setcap cap_net_raw,cap_net_admin=eip ./network-traffic-analyzer
 - Time limit for capture (-t)
 - Interface discovery (--interfaces) 
 
+> [!TIP]
 > For the complete list of CLI options, use:
 > `--help`
 
