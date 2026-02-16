@@ -1,6 +1,8 @@
 #include "../../include/capture/pcapCapture.hpp"
 #include "../../include/stats/protocolStats.hpp"
 #include "../../include/cli/cli.hpp"
+
+/* get a list of all available network interfaces */
 void PcapCapture::initialize() {
 	/*	find all devs available in network, save them to pcap_if_t struct (interfaces) */
 	if (pcap_findalldevs(&interfaces, errbuf) == -1) {
@@ -9,6 +11,7 @@ void PcapCapture::initialize() {
 }
 
 void PcapCapture::start() {
+	// getting the netmask of the interface
 	if (pcap_lookupnet(interface.c_str(), &net, &mask, errbuf) == -1) {
 		fprintf(stderr, "Couldn't get netmask for device %s: %s\n",
 			interface, errbuf);
@@ -44,7 +47,7 @@ void PcapCapture::start() {
 	}
 
 
-	/*we start a separate thread */
+	/* start a separate thread */
 	running = true;
 	thread = std::thread([this]() {
 		if (pcap_loop(handle, num_packets, &PcapCapture::callback, reinterpret_cast<u_char*>(this)) < 0) {

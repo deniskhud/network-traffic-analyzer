@@ -46,8 +46,9 @@ private:
 	 * we use a static function(its just a function with namespace)
 	 */
 	static void callback(u_char *args, const struct pcap_pkthdr *header, const u_char *packet);
+	// packet processing logic
 	void got_packet(const struct pcap_pkthdr *header, const u_char *packet);
-
+	// separate thread for capture
 	std::thread thread;
 	std::atomic<bool> running{false};
 

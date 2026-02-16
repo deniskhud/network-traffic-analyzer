@@ -45,7 +45,7 @@ void argsParser::print_help() const {
 		"Network Traffic Analyzer\n"
 		"========================\n\n"
 		"Usage:\n"
-		"  netanalyze [options]\n\n"
+		"  ./network-traffic-analyzer [options]\n\n"
 		"Description:\n"
 		"  Captures and analyzes network traffic from live interfaces or\n"
 		"  offline pcap files. Provides protocol statistics, top talkers,\n"
@@ -55,9 +55,9 @@ void argsParser::print_help() const {
 
 	std::cout <<
 		"Examples:\n"
-		"  netanalyze -i eth0 -v top-talkers -s bytes -n 5\n"
-		"  netanalyze -i any --filter proto:dns\n"
-		"  netanalyze --pcap traffic.pcap --json result.json\n";
+		"  ./network-traffic-analyzer -i wlan0 --count 100 --time 10\n"
+		"  ./network-traffic-analyzer -i any --filter port:54\n"
+		"  ./network-traffic-analyzer --offline traffic.pcap --json result.json\n\n";
 
-
+	std::cout << "To end the program, press 'q' or Esc to exit.\n";
 }

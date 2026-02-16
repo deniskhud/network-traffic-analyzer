@@ -18,8 +18,6 @@ add_executable(network-traffic-analyzer main.cpp
         src/cli/argsParse.cpp
         include/cli/filter.hpp
         src/cli/filter.cpp
-        include/cli/cli.hpp
-        src/cli/cli.cpp
 )
 
 include(FetchContent)
@@ -41,7 +39,7 @@ target_link_libraries(network-traffic-analyzer
         Boost::program_options
         ftxui::screen
         ftxui::dom
-        ftxui::component  # Not needed for this example.
+        ftxui::component 
 
 
 )
