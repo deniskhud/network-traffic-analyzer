@@ -1,6 +1,6 @@
 #include "../../include/capture/pcapCapture.hpp"
 #include "../../include/stats/protocolStats.hpp"
-#include "../../include/cli/cli.hpp"
+
 
 /* get a list of all available network interfaces */
 void PcapCapture::initialize() {
