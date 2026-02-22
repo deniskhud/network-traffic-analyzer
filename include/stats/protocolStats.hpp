@@ -35,10 +35,37 @@ struct BandwidthPoint {
 	double bytes_per_sec;
 };
 
+struct StatsSnapshot {
+	std::vector<std::vector<std::string>> transport_rows;
+	std::vector<std::vector<std::string>> app_rows;
+	std::vector<std::vector<std::string>> rows;
+	std::vector<std::vector<std::string>> pairs_rows;
+	std::vector<std::vector<std::string>> packets_rows;
+
+	uint32_t total_p = 0, total_b = 0;
+	//bandwidth
+	std::vector<BandwidthPoint> bandwidth_history;
+	double bandwidth = 0;
+	mutable double max_bandwidth = 0;
+
+};
+
+
+/**
+ * @brief Thread-safe statistics engine.
+ *
+ * Responsible for:
+ *  - Aggregating packet statistics
+ *  - Maintaining protocol distributions
+ *  - Tracking IP traffic
+ *  - Calculating bandwidth
+ *  - Providing snapshot for UI rendering
+ *
+ * All write operations are protected by mutex.
+ */
 class Stats {
 private:
 	std::mutex mtx;
-	uint32_t total_p = 0, total_b = 0;
 
 	uint32_t last_b = 0;
 
@@ -51,23 +78,21 @@ private:
 
 	std::map<std::pair<std::string, std::string>, protocolStats> pairs;
 
-	std::vector<BandwidthPoint> bandwidth_history;
-
 	std::deque<Packet> packets;
 	int limit_packets = 10;
 
 
 public:
+
 	void push(const Packet& p) {
 		std::lock_guard<std::mutex> lock(mtx);
-		if (packets.size() > limit_packets) {
+		if (packets.size() > static_cast<long unsigned int>(limit_packets)) {
 			packets.pop_front();
 		}
 		packets.push_back(p);
 	}
-	double bandwidth = 0;
-	double max_bandwidth = 0;
 
+	StatsSnapshot snapshot;
 	void update_bandwidth();
 	double smooth_value(size_t i, size_t start);
 	double smooth_bandwidth = 0.0;
@@ -77,31 +102,15 @@ public:
 	}
 
 	void add_packet(Packet &packet);
-	ftxui::Element print_stats();
 
-	std::vector<std::vector<std::string>> transport_rows;
 	void update_transport_stats();
-	ftxui::Element print_transport_stats();
-
-	std::vector<std::vector<std::string>> app_rows;
 	void update_application_stats();
-	ftxui::Element print_application_stats();
-
-	std::vector<std::vector<std::string>> rows;
 	void update_ip_stats(size_t limit);
-	ftxui::Element print_ip_stats(size_t limit);
-
-	std::vector<std::vector<std::string>> pairs_rows;
 	void update_pairs(size_t limit = 10);
-	ftxui::Element print_pairs(size_t limit = 10);
-	Element print_bandwidth();
-	Element print_packets();
+	void update_packets();
 
 	void export_csv(const std::string& filename);
 	void export_json(const std::string& filename);
-
-	std::vector<std::vector<std::string>> packets_rows;
-	void update_packets();
 
 	Stats();
 };

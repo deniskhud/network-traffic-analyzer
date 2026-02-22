@@ -13,8 +13,8 @@ uint16_t IP_class::get_payload_len() {
 
 
 /*** Ipv4 ***/
-IPv4::IPv4(u_char* data) {
-	ip_hdr = reinterpret_cast<ip*>(data);
+IPv4::IPv4(const u_char* data) {
+	ip_hdr = reinterpret_cast<const ip*>(data);
 	ip_hdr_len = ip_hdr->ip_hl * 4;
 	if (ip_hdr_len < 20) {
 		fprintf(stderr, "Failed to initial IPv4 ");
@@ -56,7 +56,7 @@ void IPv4::handle_tcp() {
 	src_port = ntohs(tcp->source);
 	dest_port = ntohs(tcp->dest);
 
-	payload_ptr = (u_char*)tcp + tcp->doff * 4;
+	payload_ptr = reinterpret_cast<u_char*>(tcp + tcp->doff * 4);
 
 	payload_len = ntohs(ip_hdr->ip_len) - (ip_hdr_len + tcp->doff * 4);
 }
@@ -97,8 +97,8 @@ uint16_t IPv4::get_dest_port() {
 
 /*** Ipv6 ***/
 
-IPv6::IPv6(u_char* data) {
-	ip_hdr = reinterpret_cast<ip6_hdr*>(data);
+IPv6::IPv6(const u_char* data) {
+	ip_hdr = reinterpret_cast<const ip6_hdr*>(data);
 
 }
 
@@ -156,8 +156,7 @@ void IPv6::handle_tcp() {
 	const auto tcp = reinterpret_cast<const tcphdr*>(ptr);
 	dest_port = ntohs(tcp->dest);
 	src_port = ntohs(tcp->source);
-	/*printf("tcp dst %d\n", dest_port);
-	printf("tcp src %d\n", src_port);*/
+
 	payload_ptr = (const uint8_t*)tcp + tcp->doff * 4;
 	payload_len = ntohs(ip_hdr->ip6_plen) - tcp->doff * 4;
 

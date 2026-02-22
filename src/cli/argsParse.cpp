@@ -1,4 +1,5 @@
 #include "../../include/cli/argsParse.hpp"
+#include <iostream>
 
 argsParser::argsParser(int argc, char** argv) {
 	desc.add_options()

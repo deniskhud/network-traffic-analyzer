@@ -6,39 +6,24 @@
 Stats::Stats() {
 	last_tick = std::chrono::steady_clock::now();
 }
-
-void Stats::update_bandwidth() {
-	std::lock_guard<std::mutex> lock(mtx);
-	using namespace std::chrono;
-
-	auto now = steady_clock::now();
-	double ts = duration_cast<duration<double>>(now.time_since_epoch()).count();
-	double elapsed = duration_cast<duration<double>>(now - last_tick).count();
-
-	if (elapsed >= 1.0) {
-
-		uint32_t delta_bytes = total_b - last_b;
-
-		bandwidth = delta_bytes / elapsed; // bytes per second
-
-		last_b = total_b;
-		last_tick = now;
-		const double alpha = 0.2;
-		smooth_bandwidth =
-			alpha * bandwidth + (1.0 - alpha) * smooth_bandwidth;
-
-		bandwidth_history.push_back({ ts, smooth_bandwidth });
-	}
-}
-
-
-
-
+/**
+ * @brief Aggregates a newly captured packet.
+ *
+ * Updates:
+ *  - Total packet/byte counters
+ *  - Transport protocol stats
+ *  - Application protocol stats
+ *  - IP-level statistics
+ *  - Communication pairs
+ *
+ * Must be called only from capture thread.
+ * Protected by mutex.
+ */
 void Stats::add_packet(Packet &packet) {
 	std::lock_guard<std::mutex> lock(mtx);
 
-	++total_p;
-	total_b += packet.total_len;
+	++snapshot.total_p;
+	snapshot.total_b += packet.total_len;
 
 	auto& t = transport_map[packet.transport_protocol];
 	t.packets++;
@@ -86,24 +71,19 @@ const char* app_to_str(ApplicationProtocol p) {
 	}
 }
 
-
-
-ftxui::Element Stats::print_stats() {
-	std::lock_guard<std::mutex> lock(mtx);
-	return vbox({
-		text("=== Traffic summary ===") | bold,
-		text("Total packets: " + std::to_string(total_p)),
-		text(std::format(
-			"Total bytes  : {:.2f} MB",
-			total_b / (1024.0 * 1024.0)
-		))
-	}) | flex;
-}
+/**
+ * @brief Rebuilds transport protocol snapshot table.
+ *
+ * Sorts protocols by packet count (descending).
+ * Calculates percentage relative to total traffic.
+ *
+ * Called periodically by UI update thread.
+ */
 
 void Stats::update_transport_stats() {
 	std::lock_guard<std::mutex> lock(mtx);
-	transport_rows.clear();
-	transport_rows.push_back({ "Proto", "Packets", "Bytes", "%" });
+	snapshot.transport_rows.clear();
+	snapshot.transport_rows.push_back({ "Proto", "Packets", "Bytes", "%" });
 
 	std::vector<std::pair<TransportProtocol, protocolStats>> tps(
 		transport_map.begin(), transport_map.end()
@@ -114,8 +94,8 @@ void Stats::update_transport_stats() {
 		});
 
 	for (const auto& [proto, stats] : tps) {
-		double percent = total_b ? stats.bytes * 100.0 / total_b : 0.0;
-		transport_rows.push_back({
+		double percent = snapshot.total_b ? stats.bytes * 100.0 / snapshot.total_b : 0.0;
+		snapshot.transport_rows.push_back({
 			transport_to_str(proto),
 			std::to_string(stats.packets),
 			std::format("{:.2f}", stats.bytes / (1024.0 * 1024.0)),
@@ -125,24 +105,13 @@ void Stats::update_transport_stats() {
 	}
 }
 
-ftxui::Element Stats::print_transport_stats() {
-	std::lock_guard<std::mutex> lock(mtx);
 
-	Table table(transport_rows);
-	table.SelectAll().Border(LIGHT);
-
-	//table.SelectColumn(0).Border(LIGHT);
-	table.SelectRow(0).Decorate(bold);
-	table.SelectRow(0).SeparatorVertical(LIGHT);
-	table.SelectRow(0).Decorate(bold);
-	table.SelectRow(0).Border(DOUBLE);
-
-	return vbox({
-		text("=== Transport protocols === ") | bold,
-		table.Render()
-	}) | flex/*| size(HEIGHT, EQUAL, 30)*/;
-}
-
+/**
+ * @brief Rebuilds application protocol snapshot.
+ *
+ * Sorted by packet count.
+ * Percent calculated relative to total bytes.
+ */
 void Stats::update_application_stats() {
 	std::lock_guard<std::mutex> lock(mtx);
 	std::vector<std::pair<ApplicationProtocol, protocolStats>> apps(
@@ -154,15 +123,15 @@ void Stats::update_application_stats() {
 			return a.second.packets > b.second.packets;
 		});
 
-	app_rows.clear();
-	app_rows.push_back({ "Proto", "Packets", "Bytes (MB)", "%" });
+	snapshot.app_rows.clear();
+	snapshot.app_rows.push_back({ "Proto", "Packets", "Bytes (MB)", "%" });
 
 	for (const auto& [proto, s] : apps) {
-		double percent = total_b
-			? s.bytes * 100.0 / total_b
+		double percent = snapshot.total_b
+			? s.bytes * 100.0 / snapshot.total_b
 			: 0.0;
 
-		app_rows.push_back({
+		snapshot.app_rows.push_back({
 			app_to_str(proto),
 			std::to_string(s.packets),
 			std::format("{:.2f}", s.bytes / (1024.0 * 1024.0)),
@@ -171,30 +140,18 @@ void Stats::update_application_stats() {
 	}
 }
 
-ftxui::Element Stats::print_application_stats() {
-	std::lock_guard<std::mutex> lock(mtx);
-
-	Table table(app_rows);
-	table.SelectAll().Border(LIGHT);
-
-	//table.SelectColumn(0).Border(LIGHT);
-	table.SelectRow(0).Decorate(bold);
-	table.SelectRow(0).SeparatorVertical(LIGHT);
-	table.SelectRow(0).Decorate(bold);
-	table.SelectRow(0).Border(DOUBLE);
-
-	//table.SelectAll().SeparatorVertical(EMPTY);
-	return vbox({
-		text("=== Application protocols ===") | bold,
-		table.Render()
-	})  | flex;
-}
-
+/**
+ * @brief Generates snapshot for top IP addresses.
+ *
+ * @param limit Maximum number of IPs to display.
+ *
+ * Sorted by transmitted packets (descending).
+ */
 void Stats::update_ip_stats(size_t limit) {
 	std::lock_guard<std::mutex> lock(mtx);
-	rows.clear();
+	snapshot.rows.clear();
 
-	rows.push_back({"IP Address", "Packets TX", "Packets RX"});
+	snapshot.rows.push_back({"IP Address", "Packets TX", "Packets RX"});
 	std::vector<std::pair<std::string, IPStats>> ips(
 		ip_map.begin(), ip_map.end()
 	);
@@ -207,7 +164,7 @@ void Stats::update_ip_stats(size_t limit) {
 	size_t count = 0;
 	for (const auto& [ip, s] : ips) {
 		if (count++ >= limit) break;
-		rows.push_back({ip,
+		snapshot.rows.push_back({ip,
 			"TX: " + std::to_string(s.packets_sent),
 			"RX: " + std::to_string(s.packets_received)}
 		);
@@ -215,25 +172,13 @@ void Stats::update_ip_stats(size_t limit) {
 	}
 }
 
-Element Stats::print_ip_stats(size_t limit)  {
-	std::lock_guard<std::mutex> lock(mtx);
-
-	Table table(rows);
-	table.SelectAll().Border(LIGHT);
-
-	table.SelectRow(0).Decorate(bold);
-	table.SelectRow(0).SeparatorVertical(LIGHT);
-	table.SelectRow(0).Decorate(bold);
-	table.SelectRow(0).Border(DOUBLE);
-
-	return vbox({
-		text("=== Top IP addresses ===") | bold,
-
-		table.Render()
-	}) | flex;
-}
-
-
+/**
+ * @brief Builds snapshot of top communication pairs.
+ *
+ * @param limit Maximum number of pairs to include.
+ *
+ * Sorted by total bytes transferred.
+ */
 
 void Stats::update_pairs(size_t limit) {
 	std::lock_guard<std::mutex> lock(mtx);
@@ -243,14 +188,14 @@ void Stats::update_pairs(size_t limit) {
 			return a.second.bytes > b.second.bytes;
 		});
 
-	pairs_rows.clear();
-	pairs_rows.push_back({ "Source", "Destination", "bytes received", "%" });
+	snapshot.pairs_rows.clear();
+	snapshot.pairs_rows.push_back({ "Source", "Destination", "bytes received", "%" });
 	size_t count = 0;
 	for (const auto& [pair, s] : vec) {
 
 		if (count++ >= limit) break;
-		double percent = total_b ? (s.bytes * 100.0 / total_b) : 0.0;
-		pairs_rows.push_back({
+		double percent = snapshot.total_b ? (s.bytes * 100.0 / snapshot.total_b) : 0.0;
+		snapshot.pairs_rows.push_back({
 			pair.first,
 			pair.second,
 			std::format("{:.0f}", s.bytes * 1.0),
@@ -261,30 +206,13 @@ void Stats::update_pairs(size_t limit) {
 	}
 }
 
-ftxui::Element Stats::print_pairs(size_t limit) {
-	std::lock_guard<std::mutex> lock(mtx);
-
-	Table table(pairs_rows);
-	table.SelectAll().Border(LIGHT);
-
-	table.SelectRow(0).Decorate(bold);
-	table.SelectRow(0).SeparatorVertical(LIGHT);
-	table.SelectRow(0).Decorate(bold);
-	table.SelectRow(0).Border(DOUBLE);
-
-	return vbox({
-		text("=== Top communication pairs ===") | bold,
-		table.Render()
-	}) | flex;
-}
-
 void Stats::update_packets(){
 	std::lock_guard lock(mtx);
-	packets_rows.clear();
-	packets_rows.push_back({ "IPVersion", "Transport protocol", "Source", "Destination", "App protocol"});
+	snapshot.packets_rows.clear();
+	snapshot.packets_rows.push_back({ "IPVersion", "Transport protocol", "Source", "Destination", "App protocol"});
 
 	for (auto& packet : packets) {
-		packets_rows.push_back({
+		snapshot.packets_rows.push_back({
 			packet.ip_version == IPVersion::v4 ? "IPv4" : "IPv6",
 			transport_to_str(packet.transport_protocol),
 			packet.src,
@@ -294,23 +222,6 @@ void Stats::update_packets(){
 		});
 	}
 }
-Element Stats::print_packets() {
-	std::lock_guard lock(mtx);
-
-	Table table(packets_rows);
-	table.SelectAll().Border(LIGHT);
-
-	//table.SelectColumn(0).Border(LIGHT);
-	table.SelectRow(0).Decorate(bold);
-	table.SelectRow(0).SeparatorVertical(LIGHT);
-	table.SelectRow(0).Decorate(bold);
-	table.SelectRow(0).Border(DOUBLE);
-	return vbox({
-		text("=== Packets ===") | bold,
-
-		table.Render() | flex
-	}) | flex;
-}
 
 double Stats::smooth_value(size_t i, size_t start) {
 	const int window = 3;
@@ -319,81 +230,77 @@ double Stats::smooth_value(size_t i, size_t start) {
 
 	for (int k = -window; k <= window; ++k) {
 		long idx = (long)i + k;
-		if (idx >= (long)start && idx < (long)bandwidth_history.size()) {
-			sum += bandwidth_history[idx].bytes_per_sec;
+		if (idx >= (long)start && idx < (long)snapshot.bandwidth_history.size()) {
+			sum += snapshot.bandwidth_history[idx].bytes_per_sec;
 			count++;
 		}
 	}
 	return count ? sum / count : 0.0;
 }
-
-
-
-ftxui::Element Stats::print_bandwidth() {
+/**
+ * @brief Calculates current bandwidth (bytes/sec).
+ *
+ * Uses:
+ *   - Delta bytes since last tick
+ *   - Time elapsed
+ *   - Exponential smoothing to reduce noise
+ *
+ * Stores history for graph rendering.
+ */
+void Stats::update_bandwidth() {
 	std::lock_guard<std::mutex> lock(mtx);
-	using namespace ftxui;
+	using namespace std::chrono;
 
-	GraphFunction fn = [this](int width, int height) {
-		std::vector<int> output(width, 0);
+	auto now = steady_clock::now();
+	double ts = duration_cast<duration<double>>(now.time_since_epoch()).count();
+	double elapsed = duration_cast<duration<double>>(now - last_tick).count();
 
-		if (bandwidth_history.size() < 2)
-			return output;
+	if (elapsed >= 1.0) {
 
-		size_t n = bandwidth_history.size();
-		size_t start = n > 50 ? n - 50 : 0;
+		uint32_t delta_bytes = snapshot.total_b - last_b;
 
+		snapshot.bandwidth = delta_bytes / elapsed; // bytes per second
 
-		double max_bw = 1.0;
-		for (size_t i = start; i < n; ++i)
-			max_bw = std::max(max_bw, bandwidth_history[i].bytes_per_sec);
+		last_b = snapshot.total_b;
+		last_tick = now;
+		const double alpha = 0.2;
+		smooth_bandwidth =
+			alpha * snapshot.bandwidth + (1.0 - alpha) * smooth_bandwidth;
 
-		for (int x = 0; x < width; ++x) {
+		snapshot.bandwidth_history.push_back({ ts, smooth_bandwidth });
+	}
+	snapshot.max_bandwidth = std::max(snapshot.max_bandwidth, snapshot.bandwidth);
 
-			double t = (double)x / (width - 1);
-
-
-			double idx_f = start + t * (n - start - 1);
-			size_t i0 = (size_t)idx_f;
-			size_t i1 = std::min(i0 + 1, n - 1);
-
-
-			double frac = idx_f - i0;
-			double bw =
-				bandwidth_history[i0].bytes_per_sec * (1.0 - frac) +
-				bandwidth_history[i1].bytes_per_sec * frac;
-
-			double v = bw / max_bw;
-			output[x] = static_cast<int>(v * (height - 1));
-		}
-
-		return output;
-	};
-	max_bandwidth = std::max(max_bandwidth, bandwidth);
-	return vbox({
-		text(std::format(" Bandwidth: {:.2f} KB / max: {:.2f} KB", bandwidth, max_bandwidth)) | bold,
-		graph(fn)
-		| size(HEIGHT, EQUAL, 20) | size(WIDTH, EQUAL, 60)
-		| border
-		| color(Color::Green),
-}) ;
 }
 
+/**
+ * @brief Exports current statistics to CSV file.
+ *
+ * Includes:
+ *  - Summary
+ *  - Transport protocols
+ *  - Application protocols
+ *  - IP statistics
+ *  - Bandwidth history
+ */
+
 void Stats::export_csv(const std::string& filename) {
+	std::lock_guard<std::mutex> lock(mtx);
 	std::ofstream file(filename);
 	if (!file.is_open()) return;
 
 	file << "summary\n";
 	file << "total_packets,total_bytes,bandwidth\n";
-	file << total_p << ","
-		 << total_b << ","
-		 << bandwidth << "\n\n";
+	file << snapshot.total_p << ","
+		 << snapshot.total_b << ","
+		 << snapshot.bandwidth << "\n\n";
 
 	// ===== Transport protocols =====
 	file << "transport_protocols\n";
 	file << "protocol,packets,bytes,percent\n";
 
 	for (const auto& [proto, s] : transport_map) {
-		double percent = total_b ? (s.bytes * 100.0 / total_b) : 0.0;
+		double percent = snapshot.total_b ? (s.bytes * 100.0 / snapshot.total_b) : 0.0;
 		file << transport_to_str(proto) << ","
 			 << s.packets << ","
 			 << s.bytes << ","
@@ -428,14 +335,23 @@ void Stats::export_csv(const std::string& filename) {
 	//bandwidth
 	file << "time,bandwidth\n";
 
-	for (const auto& p : bandwidth_history) {
+	for (const auto& p : snapshot.bandwidth_history) {
 		file << p.timestamp << "," << p.bytes_per_sec << "\n";
 	}
 
 	file.close();
 
 }
+/**
+ * @brief Exports statistics to JSON format.
+ *
+ * Designed for:
+ *  - External processing
+ *  - Visualization tools
+ *  - Data pipelines
+ */
 void Stats::export_json(const std::string& filename) {
+	std::lock_guard<std::mutex> lock(mtx);
 	std::ofstream file(filename);
 	if (!file.is_open()) return;
 
@@ -443,9 +359,9 @@ void Stats::export_json(const std::string& filename) {
 
 	// ===== Summary =====
 	file << "  \"summary\": {\n";
-	file << "    \"total_packets\": " << total_p << ",\n";
-	file << "    \"total_bytes\": " << total_b << ",\n";
-	file << "    \"bandwidth\": " << bandwidth << "\n";
+	file << "    \"total_packets\": " << snapshot.total_p << ",\n";
+	file << "    \"total_bytes\": " << snapshot.total_b << ",\n";
+	file << "    \"bandwidth\": " << snapshot.bandwidth << "\n";
 	file << "  },\n";
 
 	// ===== Transport =====
@@ -455,7 +371,7 @@ void Stats::export_json(const std::string& filename) {
 		if (!first) file << ",\n";
 		first = false;
 
-		double percent = total_b ? (s.bytes * 100.0 / total_b) : 0.0;
+		double percent = snapshot.total_b ? (s.bytes * 100.0 / snapshot.total_b) : 0.0;
 
 		file << "    {\n";
 		file << "      \"protocol\": \"" << transport_to_str(proto) << "\",\n";

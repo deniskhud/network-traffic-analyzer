@@ -1,5 +1,4 @@
 #include "../../include/packet/packet.hpp"
-
 #include <cstring>
 
 ApplicationProtocol Packet::get_application_protocol() {

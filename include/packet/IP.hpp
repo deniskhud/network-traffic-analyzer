@@ -52,7 +52,7 @@ public:
 	uint16_t get_src_port() override;
 	uint16_t get_dest_port() override;
 
-	IPv4(u_char* data);
+	explicit IPv4(const u_char* data);
 };
 
 
@@ -78,16 +78,14 @@ private:
 	const uint8_t* ptr = nullptr;
 
 public:
-	explicit IPv6(u_char* data);
+	explicit IPv6(const u_char* data);
 
 	TransportProtocol get_protocol() override;
 	std::string get_source() override;
 	std::string get_dest() override;
 	uint16_t get_src_port() override;
 	uint16_t get_dest_port() override;
-	IPv6() {  }
+
 };
-
-
 
 #endif //IP_HPP

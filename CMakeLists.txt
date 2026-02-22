@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.31)
 project(network-traffic-analyzer)
 
 set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
 link_libraries(pcap)
 
 find_package(Boost REQUIRED COMPONENTS program_options)
@@ -18,6 +21,8 @@ add_executable(network-traffic-analyzer main.cpp
         src/cli/argsParse.cpp
         include/cli/filter.hpp
         src/cli/filter.cpp
+        include/TUI/view.hpp
+        src/TUI/view.cpp
 )
 
 include(FetchContent)
@@ -39,7 +44,5 @@ target_link_libraries(network-traffic-analyzer
         Boost::program_options
         ftxui::screen
         ftxui::dom
-        ftxui::component 
-
-
+        ftxui::component
 )

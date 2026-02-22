@@ -16,7 +16,7 @@ filter parse(std::string str) {
 	if (type == "dest") return {IP_DEST, value};
 	if (type == "src") return {IP_SRC, value};
 	if (type == "ip") return {IP_TYPE, value};
-	return {IP_SRC, value};
+	return {NONE, value};
 }
 
 std::string get_bpf_filter(std::vector<filter>& f) {
