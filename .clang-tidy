@@ -1,0 +1,10 @@
+Checks: >
+  *,
+  -abseil-*, -altera-*, -android-*, -fuchsia-*, -google-*, -llvm-*,
+  -modernize-use-trailing-return-type,
+  -readability-identifier-length,
+  -readability-magic-numbers,
+  -cppcoreguidelines-avoid-magic-numbers
+
+WarningsAsErrors: >
+  bugprone-*, cert-*, clang-analyzer-*, cppcoreguidelines-*, performance-*
