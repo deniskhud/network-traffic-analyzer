@@ -82,3 +82,9 @@ just run -i wlan0 -c 100
 ```
 ### Analyze offline pcap file
 ```
+just run --offline traffic.pcap
+```
+### Export results (json / csv)
+```
+just run --json result.json --csv result.csv
+```
