@@ -1,25 +1,21 @@
 #include "include/capture/pcapCapture.hpp"
-#include <iostream>
-#include <pcap/pcap.h>
-#include <boost/program_options.hpp>
 #include "include/cli/filter.hpp"
-#include <ftxui/component/screen_interactive.hpp>
+#include <boost/program_options.hpp>
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/component_options.hpp>
+#include <ftxui/component/screen_interactive.hpp>
+#include <iostream>
+#include <pcap/pcap.h>
 
-
-#include "include/cli/argsParse.hpp"
 #include "include/TUI/view.hpp"
-#define SNAP_LEN 1518
+#include "include/cli/argsParse.hpp"
 
-int main(int argc, char **argv)
-{
+int main(int argc, char **argv) {
+	/* initialize stats */
+	Stats stats;
 	/* initialize capture */
 	PcapCapture capture;
 	capture.initialize();
-
-	/* initialize stats */
-	Stats stats;
 
 	/* initializing the command line parser */
 	argsParser parser(argc, argv);
@@ -43,8 +39,8 @@ int main(int argc, char **argv)
 	/* get a filter, use vector for multiple  */
 	std::vector<filter> filters;
 	if (parser.vm.contains("filter")) {
-		auto& f = parser.vm["filter"].as<std::vector<std::string>>();
-		for (auto& x : f) {
+		auto &f = parser.vm["filter"].as<std::vector<std::string>>();
+		for (auto &x : f) {
 			filters.push_back(parse(x));
 			filterString += x + " ";
 		}
@@ -57,97 +53,102 @@ int main(int argc, char **argv)
 	/* set the flags to capture engine */
 	capture.set_capabilities(interface, count, expression, limit, &stats);
 
-
 	std::atomic<bool> capture_finished = false;
-
+	std::atomic<bool> ui_running = true;
 	/* if we capture packets offline, we read the file in full, then print the result */
 	if (isOffline) {
 
-        capture.start_offline(parser.vm["offline"].as<std::string>());
+		capture.start_offline(parser.vm["offline"].as<std::string>());
 
-        /* full recalculation of statistics after file processing */
-        stats.update_packets();
-        stats.update_application_stats();
-        stats.update_transport_stats();
-        stats.update_ip_stats(10);
-        stats.update_pairs();
-        stats.update_bandwidth();
-    }
+		/* full recalculation of statistics after file processing */
+		stats.update_packets();
+		stats.update_application_stats();
+		stats.update_transport_stats();
+		stats.update_ip_stats(10);
+		stats.update_pairs();
+		stats.update_bandwidth();
+	}
 	/* otherwise start live capture */
-    else {
-        capture.start();
-    }
+	else {
+		capture.start();
+	}
 
-    /* UI */
-    using namespace ftxui;
-    auto screen = ScreenInteractive::Fullscreen();
-	/* our class for UI */
-    View view;
-
-	/* timer */
+	/* UI */
+	// Timer
 	std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-	std::chrono::seconds timer{0};
+	std::atomic<std::chrono::seconds> timer;
+	auto screen = ftxui::ScreenInteractive::Fullscreen();
 
-    auto renderer = Renderer([&] {
-        auto snapshot = stats.snapshot;
-        return view.render(snapshot,
-                           interface,
-                           filterString,
-                           capture_finished,
-                           timer);
-    });
+	/* our class for UI */
+	View view;
+	std::mutex render_mtx;
+	std::mutex event_mtx;
+	ftxui::Element current_render = isOffline
+										? view.render(stats.get_snapshot(), interface, filterString, true, timer.load())
+										: ftxui::text("Starting capture...");
 
-    auto component = CatchEvent(renderer, [&](Event e) {
-        if (e == Event::Character('q') || e == Event::Escape) {
-            capture.stop();
-            screen.Exit();
-        }
-        return true;
-    });
+	std::mutex screen_mtx;
 
+	auto component = ftxui::Renderer([&] {
+		std::lock_guard<std::mutex> lock(render_mtx);
+		return current_render;
+	});
 
-    std::thread updater;
+	component |= ftxui::CatchEvent([&](ftxui::Event e) {
+		if (e == ftxui::Event::Character('q') || e == ftxui::Event::Escape) {
+			ui_running = false;
+			screen.Exit();
+			return true;
+		}
+		return true;
+	});
+	std::thread application_thread;
+	if (!isOffline) {
+		application_thread = std::thread([&] {
+			while (!capture_finished && ui_running) {
 
-    if (!isOffline) {
-        updater = std::thread([&] {
-            while (capture.isRunning()) {
+				auto now = std::chrono::steady_clock::now();
+				timer.store(std::chrono::duration_cast<std::chrono::seconds>(now - begin));
 
-                stats.update_packets();
-                stats.update_application_stats();
-                stats.update_transport_stats();
-                stats.update_ip_stats(10);
-                stats.update_pairs();
-                stats.update_bandwidth();
+				if (timer.load() >= std::chrono::seconds(time) || !capture.isRunning()) {
+					capture_finished = true;
+				}
 
-                screen.PostEvent(Event::Custom);
-                std::this_thread::sleep_for(std::chrono::milliseconds(300));
+				stats.update_packets();
+				stats.update_application_stats();
+				stats.update_transport_stats();
+				stats.update_ip_stats(10);
+				stats.update_pairs();
+				stats.update_bandwidth();
 
-                auto current_time = std::chrono::steady_clock::now();
-                timer = std::chrono::duration_cast<std::chrono::seconds>(
-                        current_time - begin);
+				ftxui::Element new_frame =
+					view.render(stats.get_snapshot(), interface, filterString, capture_finished, timer.load());
+				{
+					std::lock_guard<std::mutex> lock(render_mtx);
+					current_render = new_frame;
+				}
+				if (ui_running) {
+					screen.PostEvent(ftxui::Event::Custom);
+				}
 
-                if (timer >= std::chrono::seconds(time))
-                    break;
-            }
+				// std::this_thread::sleep_for(std::chrono::milliseconds(500));
+			}
+		});
+	}
 
-            capture_finished = true;
-            screen.PostEvent(Event::Custom);
-        });
-    }
+	screen.Loop(component);
 
-    screen.Loop(component);
+	ui_running = false;
+	capture_finished = true;
 
-    if (updater.joinable())
-        updater.join();
+	if (application_thread.joinable())
+		application_thread.join();
 
-    /* check export flags */
-    if (parser.vm.contains("csv")) {
-        stats.export_csv(parser.vm["csv"].as<std::string>());
-    }
-    if (parser.vm.contains("json")) {
-        stats.export_json(parser.vm["json"].as<std::string>());
-    }
+	// Export stats if needed
+	if (parser.vm.contains("csv"))
+		stats.export_csv(parser.vm["csv"].as<std::string>());
+	if (parser.vm.contains("json"))
+		stats.export_json(parser.vm["json"].as<std::string>());
 
-    return 0;
+	return 0;
 }
-

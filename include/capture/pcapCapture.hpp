@@ -1,28 +1,25 @@
 #ifndef PCAPCAPTURE_HPP
 #define PCAPCAPTURE_HPP
 
-#include <memory>
-#include <queue>
-#include <pcap/pcap.h>
-#include <thread>
 #include <deque>
+#include <memory>
+#include <pcap/pcap.h>
+#include <queue>
+#include <thread>
 
-//include C libraries
-extern "C" {
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <netinet/if_ether.h>
-#include <netinet/tcp.h>
 #include <netinet/igmp.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <sys/types.h>
 #define SNAP_LEN 1518
-}
 
-#include "../packet/IP.hpp"
 #include "../../include/stats/protocolStats.hpp"
+#include "../packet/IP.hpp"
 #include "../packet/packet.hpp"
 
 /**
@@ -43,7 +40,7 @@ extern "C" {
  */
 
 class PcapCapture {
-private:
+  private:
 	/* libpcap error buffer */
 	char errbuf[PCAP_ERRBUF_SIZE];
 
@@ -52,7 +49,10 @@ private:
 	/* compiled filter program (expression) */
 	struct bpf_program fp = {};
 	/* Active pcap handle */
-	pcap_t *handle = nullptr;
+	std::unique_ptr<pcap_t, decltype(&pcap_close)> handle{nullptr, &pcap_close};
+	void datalink_type(int type);
+	uint16_t offset = 0;
+	std::function<uint16_t(const u_char *)> get_ether_type;
 
 	/* Network mask and IP */
 	bpf_u_int32 mask = 0;
@@ -72,7 +72,7 @@ private:
 	 * Since libpcap expects a C function pointer,
 	 * we use a static function and forward the call
 	 * to the class instance.
-	*/
+	 */
 	static void callback(u_char *args, const struct pcap_pkthdr *header, const u_char *packet);
 	// packet processing logic
 	void got_packet(const struct pcap_pkthdr *header, const u_char *packet);
@@ -80,28 +80,23 @@ private:
 	/* Separate thread used for live capture */
 	std::thread thread;
 	std::atomic<bool> running{false};
+	void stop();
+	Stats *stats;
 
-public:
-
+  public:
+	~PcapCapture();
 	void print_interfaces();
 
-	bool isRunning() {
-		return running;
-	}
-	void setRunning(bool running) {
-		this->running = running;
-	}
+	bool isRunning() { return running; }
+	void setRunning(bool running) { this->running = running; }
 	/* Pointer to statistics engine */
-	Stats* stats;
 
-	void set_capabilities(std::string& interface, int num_packets, std::string& filter_exp, int packets_limit, Stats* stats);
+	void set_capabilities(const std::string &interface, int num_packets, const std::string &filter_exp,
+						  int packets_limit, Stats *stats);
 	void initialize();
 
-
 	void start();
-	void start_offline(std::string fpath);
-	void stop();
+	void start_offline(const std::string &fpath);
 };
 
-
-#endif //PCAPCAPTURE_HPP
+#endif // PCAPCAPTURE_HPP

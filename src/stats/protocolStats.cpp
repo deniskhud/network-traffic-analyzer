@@ -1,11 +1,8 @@
 #include "../../include/stats/protocolStats.hpp"
-
 #include "ftxui/dom/table.hpp"
+#include <fstream>
 
-
-Stats::Stats() {
-	last_tick = std::chrono::steady_clock::now();
-}
+Stats::Stats() { last_tick = std::chrono::steady_clock::now(); }
 /**
  * @brief Aggregates a newly captured packet.
  *
@@ -19,17 +16,17 @@ Stats::Stats() {
  * Must be called only from capture thread.
  * Protected by mutex.
  */
-void Stats::add_packet(Packet &packet) {
+void Stats::add_packet(const Packet &packet) {
 	std::lock_guard<std::mutex> lock(mtx);
 
 	++snapshot.total_p;
 	snapshot.total_b += packet.total_len;
 
-	auto& t = transport_map[packet.transport_protocol];
+	auto &t = transport_map[packet.transport_protocol];
 	t.packets++;
 	t.bytes += packet.total_len;
 
-	auto& a = application_map[packet.application_protocol];
+	auto &a = application_map[packet.application_protocol];
 	a.packets++;
 	a.bytes += packet.payload_len;
 
@@ -42,32 +39,45 @@ void Stats::add_packet(Packet &packet) {
 	auto key = std::make_pair(packet.src, packet.dst);
 	pairs[key].packets++;
 	pairs[key].bytes += packet.total_len;
-
 }
 
-
-const char* transport_to_str(TransportProtocol p) {
+const char *transport_to_str(TransportProtocol p) {
 	switch (p) {
-		case TransportProtocol::TCP:   return "TCP";
-		case TransportProtocol::UDP:   return "UDP";
-		case TransportProtocol::ICMP:  return "ICMP";
-		case TransportProtocol::ICMP6: return "ICMP6";
-		case TransportProtocol::IGMP:  return "IGMP";
-		default:                       return "UNKNOWN";
+	case TransportProtocol::TCP:
+		return "TCP";
+	case TransportProtocol::UDP:
+		return "UDP";
+	case TransportProtocol::ICMP:
+		return "ICMP";
+	case TransportProtocol::ICMP6:
+		return "ICMP6";
+	case TransportProtocol::IGMP:
+		return "IGMP";
+	default:
+		return "UNKNOWN";
 	}
 }
 
-const char* app_to_str(ApplicationProtocol p) {
+const char *app_to_str(ApplicationProtocol p) {
 	switch (p) {
-		case ApplicationProtocol::HTTP:  return "HTTP";
-		case ApplicationProtocol::HTTPS: return "HTTPS";
-		case ApplicationProtocol::DNS:   return "DNS";
-		case ApplicationProtocol::FTP:   return "FTP";
-		case ApplicationProtocol::SSH:   return "SSH";
-		case ApplicationProtocol::SMTP:  return "SMTP";
-		case ApplicationProtocol::QUIC:  return "QUIC";
-		case ApplicationProtocol::NTP:   return "NTP";
-		default:                         return "UNKNOWN";
+	case ApplicationProtocol::HTTP:
+		return "HTTP";
+	case ApplicationProtocol::HTTPS:
+		return "HTTPS";
+	case ApplicationProtocol::DNS:
+		return "DNS";
+	case ApplicationProtocol::FTP:
+		return "FTP";
+	case ApplicationProtocol::SSH:
+		return "SSH";
+	case ApplicationProtocol::SMTP:
+		return "SMTP";
+	case ApplicationProtocol::QUIC:
+		return "QUIC";
+	case ApplicationProtocol::NTP:
+		return "NTP";
+	default:
+		return "UNKNOWN";
 	}
 }
 
@@ -83,28 +93,18 @@ const char* app_to_str(ApplicationProtocol p) {
 void Stats::update_transport_stats() {
 	std::lock_guard<std::mutex> lock(mtx);
 	snapshot.transport_rows.clear();
-	snapshot.transport_rows.push_back({ "Proto", "Packets", "Bytes", "%" });
+	snapshot.transport_rows.push_back({"Proto", "Packets", "Bytes", "%"});
 
-	std::vector<std::pair<TransportProtocol, protocolStats>> tps(
-		transport_map.begin(), transport_map.end()
-	);
-	std::sort(tps.begin(), tps.end(),
-		[](auto& a, auto& b) {
-			return a.second.packets > b.second.packets;
-		});
+	std::vector<std::pair<TransportProtocol, protocolStats>> tps(transport_map.begin(), transport_map.end());
+	std::sort(tps.begin(), tps.end(), [](auto &a, auto &b) { return a.second.packets > b.second.packets; });
 
-	for (const auto& [proto, stats] : tps) {
+	for (const auto &[proto, stats] : tps) {
 		double percent = snapshot.total_b ? stats.bytes * 100.0 / snapshot.total_b : 0.0;
-		snapshot.transport_rows.push_back({
-			transport_to_str(proto),
-			std::to_string(stats.packets),
-			std::format("{:.2f}", stats.bytes / (1024.0 * 1024.0)),
-			std::format("{:.2f}", percent)
-		});
-
+		snapshot.transport_rows.push_back({transport_to_str(proto), std::to_string(stats.packets),
+										   std::format("{:.2f}", stats.bytes / (1024.0 * 1024.0)),
+										   std::format("{:.2f}", percent)});
 	}
 }
-
 
 /**
  * @brief Rebuilds application protocol snapshot.
@@ -114,29 +114,19 @@ void Stats::update_transport_stats() {
  */
 void Stats::update_application_stats() {
 	std::lock_guard<std::mutex> lock(mtx);
-	std::vector<std::pair<ApplicationProtocol, protocolStats>> apps(
-		application_map.begin(), application_map.end()
-	);
+	std::vector<std::pair<ApplicationProtocol, protocolStats>> apps(application_map.begin(), application_map.end());
 
-	std::sort(apps.begin(), apps.end(),
-		[](auto& a, auto& b) {
-			return a.second.packets > b.second.packets;
-		});
+	std::sort(apps.begin(), apps.end(), [](auto &a, auto &b) { return a.second.packets > b.second.packets; });
 
 	snapshot.app_rows.clear();
-	snapshot.app_rows.push_back({ "Proto", "Packets", "Bytes (MB)", "%" });
+	snapshot.app_rows.push_back({"Proto", "Packets", "Bytes (MB)", "%"});
 
-	for (const auto& [proto, s] : apps) {
-		double percent = snapshot.total_b
-			? s.bytes * 100.0 / snapshot.total_b
-			: 0.0;
+	for (const auto &[proto, s] : apps) {
+		double percent = snapshot.total_b ? s.bytes * 100.0 / snapshot.total_b : 0.0;
 
-		snapshot.app_rows.push_back({
-			app_to_str(proto),
-			std::to_string(s.packets),
-			std::format("{:.2f}", s.bytes / (1024.0 * 1024.0)),
-			std::format("{:.2f}", percent)
-		});
+		snapshot.app_rows.push_back({app_to_str(proto), std::to_string(s.packets),
+									 std::format("{:.2f}", s.bytes / (1024.0 * 1024.0)),
+									 std::format("{:.2f}", percent)});
 	}
 }
 
@@ -152,23 +142,16 @@ void Stats::update_ip_stats(size_t limit) {
 	snapshot.rows.clear();
 
 	snapshot.rows.push_back({"IP Address", "Packets TX", "Packets RX"});
-	std::vector<std::pair<std::string, IPStats>> ips(
-		ip_map.begin(), ip_map.end()
-	);
+	std::vector<std::pair<std::string, IPStats>> ips(ip_map.begin(), ip_map.end());
 
-	std::sort(ips.begin(), ips.end(),
-		[](auto& a, auto& b) {
-			return a.second.packets_sent > b.second.packets_sent;
-		});
+	std::sort(ips.begin(), ips.end(), [](auto &a, auto &b) { return a.second.packets_sent > b.second.packets_sent; });
 
 	size_t count = 0;
-	for (const auto& [ip, s] : ips) {
-		if (count++ >= limit) break;
-		snapshot.rows.push_back({ip,
-			"TX: " + std::to_string(s.packets_sent),
-			"RX: " + std::to_string(s.packets_received)}
-		);
-
+	for (const auto &[ip, s] : ips) {
+		if (count++ >= limit)
+			break;
+		snapshot.rows.push_back(
+			{ip, "TX: " + std::to_string(s.packets_sent), "RX: " + std::to_string(s.packets_received)});
 	}
 }
 
@@ -183,17 +166,15 @@ void Stats::update_ip_stats(size_t limit) {
 void Stats::update_pairs(size_t limit) {
 	std::lock_guard<std::mutex> lock(mtx);
 	std::vector<std::pair<std::pair<std::string, std::string>, protocolStats>> vec(pairs.begin(), pairs.end());
-	std::sort(vec.begin(), vec.end(),
-		[](auto& a, auto& b) {
-			return a.second.bytes > b.second.bytes;
-		});
+	std::sort(vec.begin(), vec.end(), [](auto &a, auto &b) { return a.second.bytes > b.second.bytes; });
 
 	snapshot.pairs_rows.clear();
-	snapshot.pairs_rows.push_back({ "Source", "Destination", "bytes received", "%" });
+	snapshot.pairs_rows.push_back({"Source", "Destination", "bytes received", "%"});
 	size_t count = 0;
-	for (const auto& [pair, s] : vec) {
+	for (const auto &[pair, s] : vec) {
 
-		if (count++ >= limit) break;
+		if (count++ >= limit)
+			break;
 		double percent = snapshot.total_b ? (s.bytes * 100.0 / snapshot.total_b) : 0.0;
 		snapshot.pairs_rows.push_back({
 			pair.first,
@@ -202,16 +183,15 @@ void Stats::update_pairs(size_t limit) {
 			std::format("{:.2f}", percent),
 
 		});
-
 	}
 }
 
-void Stats::update_packets(){
+void Stats::update_packets() {
 	std::lock_guard lock(mtx);
 	snapshot.packets_rows.clear();
-	snapshot.packets_rows.push_back({ "IPVersion", "Transport protocol", "Source", "Destination", "App protocol"});
+	snapshot.packets_rows.push_back({"IPVersion", "Transport protocol", "Source", "Destination", "App protocol"});
 
-	for (auto& packet : packets) {
+	for (auto &packet : packets) {
 		snapshot.packets_rows.push_back({
 			packet.ip_version == IPVersion::v4 ? "IPv4" : "IPv6",
 			transport_to_str(packet.transport_protocol),
@@ -264,13 +244,11 @@ void Stats::update_bandwidth() {
 		last_b = snapshot.total_b;
 		last_tick = now;
 		const double alpha = 0.2;
-		smooth_bandwidth =
-			alpha * snapshot.bandwidth + (1.0 - alpha) * smooth_bandwidth;
+		smooth_bandwidth = alpha * snapshot.bandwidth + (1.0 - alpha) * smooth_bandwidth;
 
-		snapshot.bandwidth_history.push_back({ ts, smooth_bandwidth });
+		snapshot.bandwidth_history.push_back({ts, smooth_bandwidth});
 	}
 	snapshot.max_bandwidth = std::max(snapshot.max_bandwidth, snapshot.bandwidth);
-
 }
 
 /**
@@ -284,27 +262,23 @@ void Stats::update_bandwidth() {
  *  - Bandwidth history
  */
 
-void Stats::export_csv(const std::string& filename) {
+void Stats::export_csv(const std::string &filename) {
 	std::lock_guard<std::mutex> lock(mtx);
 	std::ofstream file(filename);
-	if (!file.is_open()) return;
+	if (!file.is_open())
+		return;
 
 	file << "summary\n";
 	file << "total_packets,total_bytes,bandwidth\n";
-	file << snapshot.total_p << ","
-		 << snapshot.total_b << ","
-		 << snapshot.bandwidth << "\n\n";
+	file << snapshot.total_p << "," << snapshot.total_b << "," << snapshot.bandwidth << "\n\n";
 
 	// ===== Transport protocols =====
 	file << "transport_protocols\n";
 	file << "protocol,packets,bytes,percent\n";
 
-	for (const auto& [proto, s] : transport_map) {
+	for (const auto &[proto, s] : transport_map) {
 		double percent = snapshot.total_b ? (s.bytes * 100.0 / snapshot.total_b) : 0.0;
-		file << transport_to_str(proto) << ","
-			 << s.packets << ","
-			 << s.bytes << ","
-			 << percent << "\n";
+		file << transport_to_str(proto) << "," << s.packets << "," << s.bytes << "," << percent << "\n";
 	}
 	file << "\n";
 
@@ -312,10 +286,8 @@ void Stats::export_csv(const std::string& filename) {
 	file << "application_protocols\n";
 	file << "protocol,packets,payload_bytes\n";
 
-	for (const auto& [proto, s] : application_map) {
-		file << static_cast<int>(proto) << ","
-			 << s.packets << ","
-			 << s.bytes << "\n";
+	for (const auto &[proto, s] : application_map) {
+		file << static_cast<int>(proto) << "," << s.packets << "," << s.bytes << "\n";
 	}
 	file << "\n";
 
@@ -323,24 +295,19 @@ void Stats::export_csv(const std::string& filename) {
 	file << "ip_stats\n";
 	file << "ip,packets_sent,packets_received,bytes_sent,bytes_received\n";
 
-	for (const auto& [ip, s] : ip_map) {
-		file << ip << ","
-			 << s.packets_sent << ","
-			 << s.packets_received << ","
-			 << s.bytes_sent << ","
+	for (const auto &[ip, s] : ip_map) {
+		file << ip << "," << s.packets_sent << "," << s.packets_received << "," << s.bytes_sent << ","
 			 << s.bytes_received << "\n";
 	}
 
-
-	//bandwidth
+	// bandwidth
 	file << "time,bandwidth\n";
 
-	for (const auto& p : snapshot.bandwidth_history) {
+	for (const auto &p : snapshot.bandwidth_history) {
 		file << p.timestamp << "," << p.bytes_per_sec << "\n";
 	}
 
 	file.close();
-
 }
 /**
  * @brief Exports statistics to JSON format.
@@ -350,10 +317,11 @@ void Stats::export_csv(const std::string& filename) {
  *  - Visualization tools
  *  - Data pipelines
  */
-void Stats::export_json(const std::string& filename) {
+void Stats::export_json(const std::string &filename) {
 	std::lock_guard<std::mutex> lock(mtx);
 	std::ofstream file(filename);
-	if (!file.is_open()) return;
+	if (!file.is_open())
+		return;
 
 	file << "{\n";
 
@@ -367,8 +335,9 @@ void Stats::export_json(const std::string& filename) {
 	// ===== Transport =====
 	file << "  \"transport\": [\n";
 	bool first = true;
-	for (const auto& [proto, s] : transport_map) {
-		if (!first) file << ",\n";
+	for (const auto &[proto, s] : transport_map) {
+		if (!first)
+			file << ",\n";
 		first = false;
 
 		double percent = snapshot.total_b ? (s.bytes * 100.0 / snapshot.total_b) : 0.0;
@@ -385,8 +354,9 @@ void Stats::export_json(const std::string& filename) {
 	// ===== IP stats =====
 	file << "  \"top_ips\": [\n";
 	first = true;
-	for (const auto& [ip, s] : ip_map) {
-		if (!first) file << ",\n";
+	for (const auto &[ip, s] : ip_map) {
+		if (!first)
+			file << ",\n";
 		first = false;
 
 		file << "    {\n";
@@ -402,8 +372,9 @@ void Stats::export_json(const std::string& filename) {
 	file << ",\n  \"communication_pairs\": [\n";
 	first = true;
 
-	for (const auto& [pair, s] : pairs) {
-		if (!first) file << ",\n";
+	for (const auto &[pair, s] : pairs) {
+		if (!first)
+			file << ",\n";
 		first = false;
 
 		file << "    {\n";

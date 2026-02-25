@@ -1,17 +1,14 @@
 #ifndef PROTOCOLSTATS_HPP
 #define PROTOCOLSTATS_HPP
 
-#include <chrono>
-#include <cstdint>
 #include "../packet/packet.hpp"
-#include <unordered_map>
+#include "ftxui/dom/elements.hpp"
+#include <chrono>
 #include <filesystem>
-#include <fstream>
 #include <map>
 #include <queue>
-#include "ftxui/dom/elements.hpp"
+#include <unordered_map>
 
-using namespace ftxui;
 struct protocolStats {
 	uint32_t packets = 0;
 	uint32_t bytes = 0;
@@ -43,13 +40,11 @@ struct StatsSnapshot {
 	std::vector<std::vector<std::string>> packets_rows;
 
 	uint32_t total_p = 0, total_b = 0;
-	//bandwidth
+	// bandwidth
 	std::vector<BandwidthPoint> bandwidth_history;
 	double bandwidth = 0;
-	mutable double max_bandwidth = 0;
-
+	double max_bandwidth = 0;
 };
-
 
 /**
  * @brief Thread-safe statistics engine.
@@ -64,13 +59,12 @@ struct StatsSnapshot {
  * All write operations are protected by mutex.
  */
 class Stats {
-private:
+  private:
 	std::mutex mtx;
 
 	uint32_t last_b = 0;
 
 	std::chrono::steady_clock::time_point last_tick;
-
 
 	std::unordered_map<TransportProtocol, protocolStats> transport_map;
 	std::unordered_map<ApplicationProtocol, protocolStats> application_map;
@@ -81,10 +75,10 @@ private:
 	std::deque<Packet> packets;
 	int limit_packets = 10;
 
+	StatsSnapshot snapshot;
 
-public:
-
-	void push(const Packet& p) {
+  public:
+	void push(const Packet &p) {
 		std::lock_guard<std::mutex> lock(mtx);
 		if (packets.size() > static_cast<long unsigned int>(limit_packets)) {
 			packets.pop_front();
@@ -92,16 +86,17 @@ public:
 		packets.push_back(p);
 	}
 
-	StatsSnapshot snapshot;
+	StatsSnapshot get_snapshot() {
+		std::lock_guard<std::mutex> lock(mtx);
+		return snapshot;
+	}
 	void update_bandwidth();
 	double smooth_value(size_t i, size_t start);
 	double smooth_bandwidth = 0.0;
 
-	void set_packets_limit(int limit) {
-		limit_packets = limit;
-	}
+	void set_packets_limit(int limit) { limit_packets = limit; }
 
-	void add_packet(Packet &packet);
+	void add_packet(const Packet &packet);
 
 	void update_transport_stats();
 	void update_application_stats();
@@ -109,12 +104,10 @@ public:
 	void update_pairs(size_t limit = 10);
 	void update_packets();
 
-	void export_csv(const std::string& filename);
-	void export_json(const std::string& filename);
+	void export_csv(const std::string &filename);
+	void export_json(const std::string &filename);
 
 	Stats();
 };
 
-
-
-#endif //PROTOCOLSTATS_HPP
+#endif // PROTOCOLSTATS_HPP

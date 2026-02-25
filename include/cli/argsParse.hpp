@@ -8,7 +8,7 @@ struct argsParser {
 	po::variables_map vm;
 	void print_help() const;
 
-	argsParser(int argc, char** argv);
+	argsParser(int argc, char **argv);
 };
 
-#endif //ARGSPARSE_HPP
+#endif // ARGSPARSE_HPP
