@@ -74,11 +74,11 @@ cd network-traffic-analyzer
 
 ### Live capture on eth0
 ```
-just capture -i eth0
+just capture eth0
 ```
 ### Capture 100 packets
 ```
-just run -i wlan0 -c 100
+just run --interface wlan0 -c 100
 ```
 ### Analyze offline pcap file
 ```
